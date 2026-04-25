@@ -34,6 +34,9 @@ public class User {
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "auto_lock_timer")
+    private Integer autoLockTimer = 5;
+
     @OneToMany(mappedBy = "userId", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<VaultItem> vaultItems;
 

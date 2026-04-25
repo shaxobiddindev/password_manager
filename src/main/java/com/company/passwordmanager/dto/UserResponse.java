@@ -13,4 +13,5 @@ public class UserResponse {
     private String email;
     private String login;
     private String role;
+    private Integer autoLockTimer;
 }

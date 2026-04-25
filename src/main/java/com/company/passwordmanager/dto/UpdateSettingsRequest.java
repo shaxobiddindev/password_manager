@@ -9,12 +9,6 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AuthResponse {
-    private String token;
-    private String tokenType;
-    private long expiresIn;
-    private String email;
-    private String login;
-    private String role;
+public class UpdateSettingsRequest {
     private Integer autoLockTimer;
 }

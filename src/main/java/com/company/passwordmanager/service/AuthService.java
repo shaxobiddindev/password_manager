@@ -92,6 +92,7 @@ public class AuthService {
                 .email(user.getEmail())
                 .login(user.getLogin())
                 .role(user.getRole().name())
+                .autoLockTimer(user.getAutoLockTimer())
                 .build();
     }
 
@@ -115,6 +116,7 @@ public class AuthService {
                 .email(user.getEmail())
                 .login(user.getLogin())
                 .role(user.getRole().name())
+                .autoLockTimer(user.getAutoLockTimer())
                 .build();
     }
 
