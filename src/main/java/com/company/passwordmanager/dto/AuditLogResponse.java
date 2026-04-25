@@ -17,6 +17,7 @@ public class AuditLogResponse {
     private Long userId;
     private Long vaultItemId;
     private AuditLog.Action action;
+    private String username;
     private String details;
     private LocalDateTime timestamp;
 }

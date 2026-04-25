@@ -20,6 +20,7 @@ public class AuditLog {
     @Column(nullable = false)
     private Long userId;
 
+    private String username;
     private Long vaultItemId;
 
     @Column(nullable = false)

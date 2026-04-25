@@ -17,11 +17,17 @@ import java.util.stream.Collectors;
 public class AuditService {
 
     private final AuditLogRepository auditLogRepository;
+    private final com.company.passwordmanager.repository.UserRepository userRepository;
 
     @Transactional
     public void log(Long userId, Long vaultItemId, AuditLog.Action action, String details) {
+        String username = userRepository.findById(userId)
+                .map(u -> u.getLogin() != null ? u.getLogin() : u.getEmail())
+                .orElse("Unknown");
+
         AuditLog auditLog = AuditLog.builder()
                 .userId(userId)
+                .username(username)
                 .vaultItemId(vaultItemId)
                 .action(action)
                 .details(details)
@@ -85,6 +91,7 @@ public class AuditService {
         return AuditLogResponse.builder()
                 .id(log.getId())
                 .userId(log.getUserId())
+                .username(log.getUsername())
                 .vaultItemId(log.getVaultItemId())
                 .action(log.getAction())
                 .details(log.getDetails())
