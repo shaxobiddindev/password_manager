@@ -60,7 +60,7 @@ public class AuthService {
         return buildAuthResponse(token, user);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         User user = userRepository.findByLogin(request.getUsername())
                 .or(() -> userRepository.findByEmail(request.getUsername()))

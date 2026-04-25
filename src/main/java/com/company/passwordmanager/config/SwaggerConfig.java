@@ -18,8 +18,8 @@ import org.springframework.context.annotation.Configuration;
                 contact = @Contact(name = "Company", email = "admin@company.com")
         ),
         servers = {
-                @Server(url = "http://localhost:8080", description = "Local"),
-                @Server(url = "https://api.yourcompany.com", description = "Production")
+                @Server(url = "http://localhost:8080/api", description = "Local"),
+                @Server(url = "https://api.yourcompany.com/api", description = "Production")
         }
 )
 @SecurityScheme(

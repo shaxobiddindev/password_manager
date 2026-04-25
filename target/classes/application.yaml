@@ -8,6 +8,15 @@ spring:
     password: Uralov2005
     driver-class-name: org.postgresql.Driver
 
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
+
 app:
   jwt:
     secret: cc428d8cc37605cec220d3a8e37a5c1e928e78a11dd96a3a4754fe506ea1215b2787ab1b74ae5e0ff32c8c4696e764dededb2f22d22b8852a1334244a2dc9eb66620b303b752cee81eeb132889b8247aca27eb4e74104ce26c2de420eee63414e4e5c17d5ab830339edff96c6d999840475148dd47af1d79100286db039baac849063d72144664e2e188eb0294c4760ddaa2316bdd2d6d858bcabf63b893e80f4c1e757be38db0232aaf44f097401d78e3e56c07cd43b4cba927afe3644ed147b46aea395f0c98f1a51c1176fc8580f09f1c3565a14652304080bcc7dc3bf1431c19039a8444417e0b0dfd17b559cf0aca55f0be6f71d8447c403dd1aff9d2e3
