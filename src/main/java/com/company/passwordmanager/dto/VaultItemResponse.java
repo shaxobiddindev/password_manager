@@ -21,8 +21,10 @@ public class VaultItemResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private long reuseCount;
-    private String visibility;
+    private java.util.List<String> sharedWithUsernames;
+    private boolean shareWithAdmins;
     private String ownerName;
+    @com.fasterxml.jackson.annotation.JsonProperty("isOwner")
     private boolean isOwner;
     // Password is intentionally excluded for security
 }

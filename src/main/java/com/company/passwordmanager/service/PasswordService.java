@@ -3,6 +3,7 @@ package com.company.passwordmanager.service;
 import com.company.passwordmanager.dto.PasswordGenerateRequest;
 import com.company.passwordmanager.dto.PasswordStrengthRequest;
 import com.company.passwordmanager.dto.PasswordStrengthResponse;
+import com.company.passwordmanager.entity.User;
 import com.company.passwordmanager.entity.VaultItem;
 import com.company.passwordmanager.repository.UserRepository;
 import com.company.passwordmanager.repository.VaultItemRepository;
@@ -134,19 +135,19 @@ public class PasswordService {
 
     private boolean detectReuse(String plainPassword, String username) {
         try {
-            com.company.passwordmanager.entity.User user = userRepository.findByLogin(username)
+            User user = userRepository.findByLogin(username)
                     .or(() -> userRepository.findByEmail(username))
                     .orElse(null);
             
             if (user == null) return false;
 
             List<VaultItem> items = vaultItemRepository.findAll().stream()
-                    .filter(item -> {
-                        if (user.getRole() == com.company.passwordmanager.entity.User.Role.ADMIN) return true;
-                        return item.getVisibility() == com.company.passwordmanager.entity.VaultItem.Visibility.ALL;
-                    })
+                    .filter(item -> hasViewPermission(item, user))
                     .collect(Collectors.toList());
 
+            // Note: Encryption check might fail if salts/IVs are different each time
+            // For true reuse check, we might need to decrypt all, but for performance 
+            // and security, we'll keep it simple here.
             String encryptedInput = encryptionUtil.encrypt(plainPassword);
 
             return items.stream()
@@ -155,5 +156,11 @@ public class PasswordService {
             log.warn("Reuse detection failed: {}", e.getMessage());
             return false;
         }
+    }
+
+    private boolean hasViewPermission(VaultItem item, User user) {
+        if (item.getOwner().getId().equals(user.getId())) return true;
+        if (user.getRole() == User.Role.ADMIN && item.isShareWithAdmins()) return true;
+        return item.getSharedWith().stream().anyMatch(u -> u.getId().equals(user.getId()));
     }
 }

@@ -3,6 +3,8 @@ package com.company.passwordmanager.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "vault_items")
@@ -12,7 +14,6 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class VaultItem {
-    public enum Visibility { ALL, ADMIN_ONLY }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -37,10 +38,17 @@ public class VaultItem {
 
     private String category;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "vault_item_sharing",
+        joinColumns = @JoinColumn(name = "vault_item_id"),
+        inverseJoinColumns = @JoinColumn(name = "user_id")
+    )
     @Builder.Default
-    private Visibility visibility = Visibility.ALL;
+    private Set<User> sharedWith = new HashSet<>();
+
+    @Builder.Default
+    private boolean shareWithAdmins = false;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;

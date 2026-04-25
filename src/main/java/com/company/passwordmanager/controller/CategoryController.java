@@ -1,5 +1,8 @@
 package com.company.passwordmanager.controller;
 
+import com.company.passwordmanager.entity.User;
+import com.company.passwordmanager.entity.VaultItem;
+import com.company.passwordmanager.repository.UserRepository;
 import com.company.passwordmanager.repository.VaultItemRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -23,25 +26,28 @@ import java.util.stream.Collectors;
 public class CategoryController {
 
     private final VaultItemRepository vaultItemRepository;
-    private final com.company.passwordmanager.repository.UserRepository userRepository;
+    private final UserRepository userRepository;
 
     @GetMapping
     @Operation(summary = "Get all user categories", description = "Returns a unique list of categories used by the user")
     public ResponseEntity<List<String>> getCategories(@AuthenticationPrincipal UserDetails userDetails) {
-        com.company.passwordmanager.entity.User user = userRepository.findByLogin(userDetails.getUsername())
+        User user = userRepository.findByLogin(userDetails.getUsername())
                 .or(() -> userRepository.findByEmail(userDetails.getUsername()))
                 .get();
         
         List<String> categories = vaultItemRepository.findAll().stream()
-                .filter(item -> {
-                    if (user.getRole() == com.company.passwordmanager.entity.User.Role.ADMIN) return true;
-                    return item.getVisibility() == com.company.passwordmanager.entity.VaultItem.Visibility.ALL;
-                })
-                .map(i -> i.getCategory())
+                .filter(item -> hasViewPermission(item, user))
+                .map(VaultItem::getCategory)
                 .filter(c -> c != null && !c.isBlank())
                 .distinct()
                 .collect(Collectors.toList());
         
         return ResponseEntity.ok(categories);
+    }
+
+    private boolean hasViewPermission(VaultItem item, User user) {
+        if (item.getOwner().getId().equals(user.getId())) return true;
+        if (user.getRole() == User.Role.ADMIN && item.isShareWithAdmins()) return true;
+        return item.getSharedWith().stream().anyMatch(u -> u.getId().equals(user.getId()));
     }
 }

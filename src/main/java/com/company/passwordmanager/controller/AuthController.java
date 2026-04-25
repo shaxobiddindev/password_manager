@@ -6,6 +6,7 @@ import com.company.passwordmanager.dto.LoginRequest;
 import com.company.passwordmanager.dto.UnlockRequest;
 import com.company.passwordmanager.dto.RegisterRequest;
 import com.company.passwordmanager.dto.UserResponse;
+import com.company.passwordmanager.dto.UserSearchResponse;
 import com.company.passwordmanager.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,6 +17,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/auth")
@@ -55,5 +58,17 @@ public class AuthController {
     public ResponseEntity<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
         authService.changePassword(request);
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/check-user")
+    @Operation(summary = "Verify user existence", description = "Checks if a user exists by username or email for sharing purposes")
+    public ResponseEntity<UserSearchResponse> checkUser(@RequestParam String query) {
+        return ResponseEntity.ok(authService.searchUser(query));
+    }
+
+    @GetMapping("/search-users")
+    @Operation(summary = "Search users", description = "Returns a list of users matching the query for autocomplete")
+    public ResponseEntity<List<UserSearchResponse>> searchUsers(@RequestParam String query) {
+        return ResponseEntity.ok(authService.searchUsers(query));
     }
 }

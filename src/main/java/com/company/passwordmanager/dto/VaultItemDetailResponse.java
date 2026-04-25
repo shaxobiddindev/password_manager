@@ -21,7 +21,9 @@ public class VaultItemDetailResponse {
     private String notes;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private String visibility;
+    private java.util.List<String> sharedWithUsernames;
+    private boolean shareWithAdmins;
     private String ownerName;
+    @com.fasterxml.jackson.annotation.JsonProperty("isOwner")
     private boolean isOwner;
 }

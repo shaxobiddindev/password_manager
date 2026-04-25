@@ -6,6 +6,7 @@ import com.company.passwordmanager.dto.LoginRequest;
 import com.company.passwordmanager.dto.RegisterRequest;
 import com.company.passwordmanager.dto.UnlockRequest;
 import com.company.passwordmanager.dto.UserResponse;
+import com.company.passwordmanager.dto.UserSearchResponse;
 import com.company.passwordmanager.entity.User;
 import com.company.passwordmanager.exception.BadCredentialsException;
 import com.company.passwordmanager.exception.DuplicateResourceException;
@@ -20,6 +21,10 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -134,5 +139,33 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
         log.info("Password changed for user: {}", username);
+    }
+
+    public UserSearchResponse searchUser(String query) {
+        return userRepository.findByLogin(query)
+                .or(() -> userRepository.findByEmail(query))
+                .filter(u -> u.getRole() != User.Role.ADMIN)
+                .map(u -> UserSearchResponse.builder()
+                        .found(true)
+                        .username(u.getLogin())
+                        .email(u.getEmail())
+                        .build())
+                .orElse(UserSearchResponse.builder()
+                        .found(false)
+                        .build());
+    }
+
+    public List<UserSearchResponse> searchUsers(String query) {
+        if (query == null || query.length() < 2) return Collections.emptyList();
+        
+        return userRepository.findByLoginContainingIgnoreCaseOrEmailContainingIgnoreCase(query, query).stream()
+                .filter(u -> u.getRole() != User.Role.ADMIN)
+                .limit(10)
+                .map(u -> UserSearchResponse.builder()
+                        .found(true)
+                        .username(u.getLogin())
+                        .email(u.getEmail())
+                        .build())
+                .collect(Collectors.toList());
     }
 }

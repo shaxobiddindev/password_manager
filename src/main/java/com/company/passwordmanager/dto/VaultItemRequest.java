@@ -19,5 +19,6 @@ public class VaultItemRequest {
     private String notes;
 
     private String category;
-    private String visibility; // ALL or ADMIN_ONLY
+    private java.util.List<String> sharedWith; // List of usernames/emails
+    private boolean shareWithAdmins;
 }
