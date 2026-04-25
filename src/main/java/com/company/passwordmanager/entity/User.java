@@ -37,7 +37,7 @@ public class User {
     @Column(name = "auto_lock_timer")
     private Integer autoLockTimer = 5;
 
-    @OneToMany(mappedBy = "userId", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "owner", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<VaultItem> vaultItems;
 
     @PrePersist

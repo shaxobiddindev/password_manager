@@ -28,12 +28,15 @@ public class CategoryController {
     @GetMapping
     @Operation(summary = "Get all user categories", description = "Returns a unique list of categories used by the user")
     public ResponseEntity<List<String>> getCategories(@AuthenticationPrincipal UserDetails userDetails) {
-        Long userId = userRepository.findByLogin(userDetails.getUsername())
+        com.company.passwordmanager.entity.User user = userRepository.findByLogin(userDetails.getUsername())
                 .or(() -> userRepository.findByEmail(userDetails.getUsername()))
-                .get().getId();
+                .get();
         
-        List<String> categories = vaultItemRepository.findAllByUserId(userId)
-                .stream()
+        List<String> categories = vaultItemRepository.findAll().stream()
+                .filter(item -> {
+                    if (user.getRole() == com.company.passwordmanager.entity.User.Role.ADMIN) return true;
+                    return item.getVisibility() == com.company.passwordmanager.entity.VaultItem.Visibility.ALL;
+                })
                 .map(i -> i.getCategory())
                 .filter(c -> c != null && !c.isBlank())
                 .distinct()

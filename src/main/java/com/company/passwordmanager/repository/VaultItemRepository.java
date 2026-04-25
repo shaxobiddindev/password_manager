@@ -8,8 +8,5 @@ import java.util.Optional;
 
 @Repository
 public interface VaultItemRepository extends JpaRepository<VaultItem, Long> {
-    List<VaultItem> findAllByUserId(Long userId);
-    Optional<VaultItem> findByIdAndUserId(Long id, Long userId);
-    List<VaultItem> findAllByUserIdAndCategory(Long userId, String category);
-    boolean existsByIdAndUserId(Long id, Long userId);
+    // Shared vault means we filter in service based on role/visibility
 }

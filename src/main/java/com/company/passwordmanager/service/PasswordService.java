@@ -16,6 +16,7 @@ import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -133,14 +134,19 @@ public class PasswordService {
 
     private boolean detectReuse(String plainPassword, String username) {
         try {
-            Long userId = userRepository.findByLogin(username)
+            com.company.passwordmanager.entity.User user = userRepository.findByLogin(username)
                     .or(() -> userRepository.findByEmail(username))
-                    .map(u -> u.getId())
                     .orElse(null);
+            
+            if (user == null) return false;
 
-            if (userId == null) return false;
+            List<VaultItem> items = vaultItemRepository.findAll().stream()
+                    .filter(item -> {
+                        if (user.getRole() == com.company.passwordmanager.entity.User.Role.ADMIN) return true;
+                        return item.getVisibility() == com.company.passwordmanager.entity.VaultItem.Visibility.ALL;
+                    })
+                    .collect(Collectors.toList());
 
-            List<VaultItem> items = vaultItemRepository.findAllByUserId(userId);
             String encryptedInput = encryptionUtil.encrypt(plainPassword);
 
             return items.stream()

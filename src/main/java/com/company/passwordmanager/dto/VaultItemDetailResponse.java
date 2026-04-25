@@ -21,4 +21,7 @@ public class VaultItemDetailResponse {
     private String notes;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String visibility;
+    private String ownerName;
+    private boolean isOwner;
 }

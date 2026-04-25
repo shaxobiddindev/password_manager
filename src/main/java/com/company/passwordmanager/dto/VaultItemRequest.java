@@ -19,4 +19,5 @@ public class VaultItemRequest {
     private String notes;
 
     private String category;
+    private String visibility; // ALL or ADMIN_ONLY
 }

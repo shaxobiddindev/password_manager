@@ -9,6 +9,7 @@ import com.company.passwordmanager.dto.VaultStatsResponse;
 import com.company.passwordmanager.entity.User;
 import com.company.passwordmanager.entity.VaultItem;
 import com.company.passwordmanager.exception.ResourceNotFoundException;
+import com.company.passwordmanager.exception.UnauthorizedException;
 import com.company.passwordmanager.repository.UserRepository;
 import com.company.passwordmanager.repository.VaultItemRepository;
 import com.company.passwordmanager.util.EncryptionUtil;
@@ -37,14 +38,22 @@ public class VaultService {
     public VaultItemResponse createItem(VaultItemRequest request, String username) {
         User user = resolveUser(username);
 
+        VaultItem.Visibility visibility = VaultItem.Visibility.ALL;
+        if (request.getVisibility() != null) {
+            try {
+                visibility = VaultItem.Visibility.valueOf(request.getVisibility().toUpperCase());
+            } catch (IllegalArgumentException ignored) {}
+        }
+
         VaultItem item = VaultItem.builder()
-                .userId(user.getId())
+                .owner(user)
                 .serviceName(request.getServiceName())
                 .url(request.getUrl())
                 .username(request.getUsername())
                 .encryptedPassword(encryptionUtil.encrypt(request.getPassword()))
                 .notes(request.getNotes())
                 .category(request.getCategory())
+                .visibility(visibility)
                 .build();
 
         item = vaultItemRepository.save(item);
@@ -52,17 +61,25 @@ public class VaultService {
 
         auditService.logCreate(user.getId(), item.getId(), item.getServiceName());
 
-        return toResponse(item);
+        return toResponse(item, user);
     }
 
     @Transactional(readOnly = true)
     public List<VaultItemResponse> getAllItems(String username) {
         User user = resolveUser(username);
-        List<VaultItem> items = vaultItemRepository.findAllByUserId(user.getId());
+        List<VaultItem> allItems = vaultItemRepository.findAll();
+
+        // Filter based on role and visibility
+        List<VaultItem> visibleItems = allItems.stream()
+                .filter(item -> {
+                    if (user.getRole() == User.Role.ADMIN) return true;
+                    return item.getVisibility() == VaultItem.Visibility.ALL;
+                })
+                .collect(Collectors.toList());
 
         // Decrypt once per item, map id -> decrypted password
         Map<Long, String> decryptedMap = new HashMap<>();
-        for (VaultItem item : items) {
+        for (VaultItem item : visibleItems) {
             decryptedMap.put(item.getId(), encryptionUtil.decrypt(item.getEncryptedPassword()));
         }
 
@@ -70,12 +87,12 @@ public class VaultService {
         Map<String, Long> passwordFrequency = decryptedMap.values().stream()
                 .collect(Collectors.groupingBy(p -> p, Collectors.counting()));
 
-        // Build responses with reuseCount = (how many OTHER items share the same password)
-        return items.stream()
+        // Build responses with reuseCount
+        return visibleItems.stream()
                 .map(item -> {
                     String decrypted = decryptedMap.get(item.getId());
                     long reuseCount = passwordFrequency.getOrDefault(decrypted, 1L) - 1;
-                    VaultItemResponse res = toResponse(item);
+                    VaultItemResponse res = toResponse(item, user);
                     res.setReuseCount(reuseCount);
                     return res;
                 })
@@ -86,23 +103,29 @@ public class VaultService {
     @Transactional
     public VaultItemDetailResponse getItem(Long id, String username) {
         User user = resolveUser(username);
-        VaultItem item = findItemForUser(id, user.getId());
+        VaultItem item = findAndCheckViewPermission(id, user);
 
         auditService.logView(user.getId(), item.getId());
 
-        return toDetailResponse(item);
+        return toDetailResponse(item, user);
     }
 
     @Transactional
     public VaultItemResponse updateItem(Long id, VaultItemRequest request, String username) {
         User user = resolveUser(username);
-        VaultItem item = findItemForUser(id, user.getId());
+        VaultItem item = findAndCheckEditPermission(id, user);
 
         item.setServiceName(request.getServiceName());
         item.setUrl(request.getUrl());
         item.setUsername(request.getUsername());
         item.setNotes(request.getNotes());
         item.setCategory(request.getCategory());
+
+        if (request.getVisibility() != null) {
+            try {
+                item.setVisibility(VaultItem.Visibility.valueOf(request.getVisibility().toUpperCase()));
+            } catch (IllegalArgumentException ignored) {}
+        }
 
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
             item.setEncryptedPassword(encryptionUtil.encrypt(request.getPassword()));
@@ -113,13 +136,13 @@ public class VaultService {
 
         auditService.logUpdate(user.getId(), item.getId(), item.getServiceName());
 
-        return toResponse(item);
+        return toResponse(item, user);
     }
 
     @Transactional
     public void deleteItem(Long id, String username) {
         User user = resolveUser(username);
-        VaultItem item = findItemForUser(id, user.getId());
+        VaultItem item = findAndCheckEditPermission(id, user);
 
         String serviceName = item.getServiceName();
         vaultItemRepository.delete(item);
@@ -131,23 +154,33 @@ public class VaultService {
     @Transactional
     public void recordCopy(Long id, String username) {
         User user = resolveUser(username);
-        VaultItem item = findItemForUser(id, user.getId());
+        VaultItem item = findAndCheckViewPermission(id, user);
         auditService.logCopy(user.getId(), item.getId());
     }
 
     @Transactional(readOnly = true)
     public List<VaultItemDetailResponse> exportVault(String username) {
         User user = resolveUser(username);
-        return vaultItemRepository.findAllByUserId(user.getId())
-                .stream()
-                .map(this::toDetailResponse)
+        List<VaultItem> allItems = vaultItemRepository.findAll();
+        
+        return allItems.stream()
+                .filter(item -> {
+                    if (user.getRole() == User.Role.ADMIN) return true;
+                    return item.getVisibility() == VaultItem.Visibility.ALL;
+                })
+                .map(i -> toDetailResponse(i, user))
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public VaultStatsResponse getStats(String username) {
         User user = resolveUser(username);
-        List<VaultItem> items = vaultItemRepository.findAllByUserId(user.getId());
+        List<VaultItem> items = vaultItemRepository.findAll().stream()
+                .filter(item -> {
+                    if (user.getRole() == User.Role.ADMIN) return true;
+                    return item.getVisibility() == VaultItem.Visibility.ALL;
+                })
+                .collect(Collectors.toList());
         
         long total = items.size();
         List<String> passwords = items.stream()
@@ -171,8 +204,11 @@ public class VaultService {
     @Transactional(readOnly = true)
     public PasswordReuseResponse checkReuse(String password, Long excludeId, String username) {
         User user = resolveUser(username);
-        List<PasswordReuseResponse.ReuseItem> reuseItems = vaultItemRepository.findAllByUserId(user.getId())
-                .stream()
+        List<PasswordReuseResponse.ReuseItem> reuseItems = vaultItemRepository.findAll().stream()
+                .filter(item -> {
+                    if (user.getRole() == User.Role.ADMIN) return true;
+                    return item.getVisibility() == VaultItem.Visibility.ALL;
+                })
                 .filter(i -> excludeId == null || !i.getId().equals(excludeId))
                 .filter(i -> encryptionUtil.decrypt(i.getEncryptedPassword()).equals(password))
                 .map(i -> PasswordReuseResponse.ReuseItem.builder()
@@ -197,13 +233,29 @@ public class VaultService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + username));
     }
 
-    private VaultItem findItemForUser(Long itemId, Long userId) {
-        return vaultItemRepository.findByIdAndUserId(itemId, userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Vault item not found with id: " + itemId));
+    private VaultItem findAndCheckViewPermission(Long itemId, User user) {
+        VaultItem item = vaultItemRepository.findById(itemId)
+                .orElseThrow(() -> new ResourceNotFoundException("Vault item not found with id: " + itemId));
+
+        if (user.getRole() != User.Role.ADMIN && item.getVisibility() == VaultItem.Visibility.ADMIN_ONLY) {
+            throw new UnauthorizedException("You do not have permission to view this item");
+        }
+        return item;
     }
 
-    private VaultItemResponse toResponse(VaultItem item) {
+    private VaultItem findAndCheckEditPermission(Long itemId, User user) {
+        VaultItem item = vaultItemRepository.findById(itemId)
+                .orElseThrow(() -> new ResourceNotFoundException("Vault item not found with id: " + itemId));
+
+        if (user.getRole() == User.Role.ADMIN) return item;
+        
+        if (!item.getOwner().getId().equals(user.getId())) {
+            throw new UnauthorizedException("Only the owner or an admin can edit/delete this item");
+        }
+        return item;
+    }
+
+    private VaultItemResponse toResponse(VaultItem item, User currentUser) {
         return VaultItemResponse.builder()
                 .id(item.getId())
                 .serviceName(item.getServiceName())
@@ -211,12 +263,15 @@ public class VaultService {
                 .username(item.getUsername())
                 .category(item.getCategory())
                 .notes(item.getNotes())
+                .visibility(item.getVisibility().name())
+                .ownerName(item.getOwner().getLogin())
+                .isOwner(item.getOwner().getId().equals(currentUser.getId()))
                 .createdAt(item.getCreatedAt())
                 .updatedAt(item.getUpdatedAt())
                 .build();
     }
 
-    private VaultItemDetailResponse toDetailResponse(VaultItem item) {
+    private VaultItemDetailResponse toDetailResponse(VaultItem item, User currentUser) {
         return VaultItemDetailResponse.builder()
                 .id(item.getId())
                 .serviceName(item.getServiceName())
@@ -225,6 +280,9 @@ public class VaultService {
                 .password(encryptionUtil.decrypt(item.getEncryptedPassword()))
                 .category(item.getCategory())
                 .notes(item.getNotes())
+                .visibility(item.getVisibility().name())
+                .ownerName(item.getOwner().getLogin())
+                .isOwner(item.getOwner().getId().equals(currentUser.getId()))
                 .createdAt(item.getCreatedAt())
                 .updatedAt(item.getUpdatedAt())
                 .build();
