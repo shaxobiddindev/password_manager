@@ -1,0 +1,93 @@
+package com.company.passwordmanager.service;
+
+import com.company.passwordmanager.dto.AuthResponse;
+import com.company.passwordmanager.dto.LoginRequest;
+import com.company.passwordmanager.dto.RegisterRequest;
+import com.company.passwordmanager.entity.User;
+import com.company.passwordmanager.exception.BadCredentialsException;
+import com.company.passwordmanager.exception.DuplicateResourceException;
+import com.company.passwordmanager.repository.UserRepository;
+import com.company.passwordmanager.security.CustomUserDetailsService;
+import com.company.passwordmanager.util.JwtUtil;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class AuthService {
+
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtUtil jwtUtil;
+    private final CustomUserDetailsService userDetailsService;
+    private final AuditService auditService;
+
+    @Value("${app.jwt.expiration}")
+    private long jwtExpiration;
+
+    @Transactional
+    public AuthResponse register(RegisterRequest request) {
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new DuplicateResourceException("Email already registered: " + request.getEmail());
+        }
+        if (request.getLogin() != null && !request.getLogin().isBlank()
+                && userRepository.existsByLogin(request.getLogin())) {
+            throw new DuplicateResourceException("Login already taken: " + request.getLogin());
+        }
+
+        User user = User.builder()
+                .email(request.getEmail())
+                .login(request.getLogin() != null && !request.getLogin().isBlank()
+                        ? request.getLogin() : request.getEmail())
+                .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .role(User.Role.USER)
+                .build();
+
+        user = userRepository.save(user);
+        log.info("New user registered: {}", request.getEmail());
+
+        auditService.logRegister(user.getId(), user.getEmail());
+
+        UserDetails userDetails = userDetailsService.loadUserByUsername(user.getLogin());
+        String token = jwtUtil.generateToken(userDetails);
+
+        return buildAuthResponse(token, user);
+    }
+
+    @Transactional(readOnly = true)
+    public AuthResponse login(LoginRequest request) {
+        User user = userRepository.findByLogin(request.getUsername())
+                .or(() -> userRepository.findByEmail(request.getUsername()))
+                .orElseThrow(() -> new BadCredentialsException("Invalid username or password"));
+
+        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            throw new BadCredentialsException("Invalid username or password");
+        }
+
+        log.info("User logged in: {}", request.getUsername());
+        auditService.logLogin(user.getId(), request.getUsername());
+
+        UserDetails userDetails = userDetailsService.loadUserByUsername(
+                user.getLogin() != null ? user.getLogin() : user.getEmail());
+        String token = jwtUtil.generateToken(userDetails);
+
+        return buildAuthResponse(token, user);
+    }
+
+    private AuthResponse buildAuthResponse(String token, User user) {
+        return AuthResponse.builder()
+                .token(token)
+                .tokenType("Bearer")
+                .expiresIn(jwtExpiration / 1000)
+                .email(user.getEmail())
+                .login(user.getLogin())
+                .role(user.getRole().name())
+                .build();
+    }
+}
