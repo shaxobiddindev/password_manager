@@ -1,8 +1,11 @@
 package com.company.passwordmanager.service;
 
+import com.company.passwordmanager.dto.PasswordReuseRequest;
+import com.company.passwordmanager.dto.PasswordReuseResponse;
 import com.company.passwordmanager.dto.VaultItemDetailResponse;
 import com.company.passwordmanager.dto.VaultItemRequest;
 import com.company.passwordmanager.dto.VaultItemResponse;
+import com.company.passwordmanager.dto.VaultStatsResponse;
 import com.company.passwordmanager.entity.User;
 import com.company.passwordmanager.entity.VaultItem;
 import com.company.passwordmanager.exception.ResourceNotFoundException;
@@ -14,7 +17,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -52,9 +58,28 @@ public class VaultService {
     @Transactional(readOnly = true)
     public List<VaultItemResponse> getAllItems(String username) {
         User user = resolveUser(username);
-        return vaultItemRepository.findAllByUserId(user.getId())
-                .stream()
-                .map(this::toResponse)
+        List<VaultItem> items = vaultItemRepository.findAllByUserId(user.getId());
+
+        // Decrypt once per item, map id -> decrypted password
+        Map<Long, String> decryptedMap = new HashMap<>();
+        for (VaultItem item : items) {
+            decryptedMap.put(item.getId(), encryptionUtil.decrypt(item.getEncryptedPassword()));
+        }
+
+        // Count occurrences of each unique password value
+        Map<String, Long> passwordFrequency = decryptedMap.values().stream()
+                .collect(Collectors.groupingBy(p -> p, Collectors.counting()));
+
+        // Build responses with reuseCount = (how many OTHER items share the same password)
+        return items.stream()
+                .map(item -> {
+                    String decrypted = decryptedMap.get(item.getId());
+                    long reuseCount = passwordFrequency.getOrDefault(decrypted, 1L) - 1;
+                    VaultItemResponse res = toResponse(item);
+                    res.setReuseCount(reuseCount);
+                    return res;
+                })
+                .sorted(Comparator.comparing(VaultItemResponse::getCreatedAt).reversed())
                 .collect(Collectors.toList());
     }
 
@@ -108,6 +133,60 @@ public class VaultService {
         User user = resolveUser(username);
         VaultItem item = findItemForUser(id, user.getId());
         auditService.logCopy(user.getId(), item.getId());
+    }
+
+    @Transactional(readOnly = true)
+    public List<VaultItemDetailResponse> exportVault(String username) {
+        User user = resolveUser(username);
+        return vaultItemRepository.findAllByUserId(user.getId())
+                .stream()
+                .map(this::toDetailResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public VaultStatsResponse getStats(String username) {
+        User user = resolveUser(username);
+        List<VaultItem> items = vaultItemRepository.findAllByUserId(user.getId());
+        
+        long total = items.size();
+        List<String> passwords = items.stream()
+                .map(i -> encryptionUtil.decrypt(i.getEncryptedPassword()))
+                .collect(Collectors.toList());
+
+        long weak = passwords.stream().filter(p -> p.length() < 8).count();
+        
+        long reused = 0;
+        java.util.Map<String, Long> counts = passwords.stream()
+                .collect(Collectors.groupingBy(java.util.function.Function.identity(), Collectors.counting()));
+        reused = counts.values().stream().filter(c -> c > 1).mapToLong(c -> c).sum();
+
+        return VaultStatsResponse.builder()
+                .total(total)
+                .weak(weak)
+                .reused(reused)
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public PasswordReuseResponse checkReuse(String password, Long excludeId, String username) {
+        User user = resolveUser(username);
+        List<PasswordReuseResponse.ReuseItem> reuseItems = vaultItemRepository.findAllByUserId(user.getId())
+                .stream()
+                .filter(i -> excludeId == null || !i.getId().equals(excludeId))
+                .filter(i -> encryptionUtil.decrypt(i.getEncryptedPassword()).equals(password))
+                .map(i -> PasswordReuseResponse.ReuseItem.builder()
+                        .id(i.getId())
+                        .serviceName(i.getServiceName())
+                        .category(i.getCategory())
+                        .build())
+                .collect(Collectors.toList());
+
+        return PasswordReuseResponse.builder()
+                .reused(!reuseItems.isEmpty())
+                .count(reuseItems.size())
+                .items(reuseItems)
+                .build();
     }
 
     // ─── Helpers ────────────────────────────────────────────────────────────────

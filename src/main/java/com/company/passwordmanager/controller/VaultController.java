@@ -1,8 +1,11 @@
 package com.company.passwordmanager.controller;
 
+import com.company.passwordmanager.dto.PasswordReuseRequest;
+import com.company.passwordmanager.dto.PasswordReuseResponse;
 import com.company.passwordmanager.dto.VaultItemDetailResponse;
 import com.company.passwordmanager.dto.VaultItemRequest;
 import com.company.passwordmanager.dto.VaultItemResponse;
+import com.company.passwordmanager.dto.VaultStatsResponse;
 import com.company.passwordmanager.service.VaultService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -75,5 +78,27 @@ public class VaultController {
             @AuthenticationPrincipal UserDetails userDetails) {
         vaultService.recordCopy(id, userDetails.getUsername());
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/export")
+    @Operation(summary = "Export vault", description = "Returns all vault items with decrypted passwords as JSON")
+    public ResponseEntity<List<VaultItemDetailResponse>> exportVault(
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(vaultService.exportVault(userDetails.getUsername()));
+    }
+
+    @GetMapping("/stats")
+    @Operation(summary = "Get vault stats", description = "Returns statistics about the vault (total items, weak passwords, reused passwords)")
+    public ResponseEntity<VaultStatsResponse> getStats(
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(vaultService.getStats(userDetails.getUsername()));
+    }
+
+    @PostMapping("/reuse-check")
+    @Operation(summary = "Check password reuse", description = "Checks if the provided password is already used in other vault items")
+    public ResponseEntity<PasswordReuseResponse> checkReuse(
+            @RequestBody PasswordReuseRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(vaultService.checkReuse(request.getPassword(), request.getExcludeId(), userDetails.getUsername()));
     }
 }

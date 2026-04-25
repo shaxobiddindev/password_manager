@@ -20,5 +20,6 @@ public class VaultItemResponse {
     private String notes;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private long reuseCount;
     // Password is intentionally excluded for security
 }

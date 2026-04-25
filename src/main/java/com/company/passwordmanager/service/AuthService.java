@@ -1,8 +1,11 @@
 package com.company.passwordmanager.service;
 
 import com.company.passwordmanager.dto.AuthResponse;
+import com.company.passwordmanager.dto.ChangePasswordRequest;
 import com.company.passwordmanager.dto.LoginRequest;
 import com.company.passwordmanager.dto.RegisterRequest;
+import com.company.passwordmanager.dto.UnlockRequest;
+import com.company.passwordmanager.dto.UserResponse;
 import com.company.passwordmanager.entity.User;
 import com.company.passwordmanager.exception.BadCredentialsException;
 import com.company.passwordmanager.exception.DuplicateResourceException;
@@ -12,6 +15,7 @@ import com.company.passwordmanager.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -89,5 +93,44 @@ public class AuthService {
                 .login(user.getLogin())
                 .role(user.getRole().name())
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public void unlock(UnlockRequest request) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        User user = userRepository.findByLogin(username)
+                .or(() -> userRepository.findByEmail(username))
+                .orElseThrow(() -> new BadCredentialsException("User not found"));
+
+        if (!passwordEncoder.matches(request.getMasterPassword(), user.getPasswordHash())) {
+            throw new BadCredentialsException("Wrong master password");
+        }
+    }
+
+    public UserResponse getCurrentUser(String username) {
+        User user = userRepository.findByLogin(username)
+                .or(() -> userRepository.findByEmail(username))
+                .orElseThrow(() -> new BadCredentialsException("User not found"));
+        return UserResponse.builder()
+                .email(user.getEmail())
+                .login(user.getLogin())
+                .role(user.getRole().name())
+                .build();
+    }
+
+    @Transactional
+    public void changePassword(ChangePasswordRequest request) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        User user = userRepository.findByLogin(username)
+                .or(() -> userRepository.findByEmail(username))
+                .orElseThrow(() -> new BadCredentialsException("User not found"));
+
+        if (!passwordEncoder.matches(request.getOldPassword(), user.getPasswordHash())) {
+            throw new BadCredentialsException("Invalid current password");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+        log.info("Password changed for user: {}", username);
     }
 }
