@@ -6,7 +6,7 @@ services:
     container_name: vault-db
     environment:
       POSTGRES_DB: pass_manager_db
-      POSTGRES_USER:
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: Uralov2005
     ports:
       - "5432:5432"
@@ -15,7 +15,7 @@ services:
     restart: always
 
   backend:
-    build: .
+    image: shaxobiddindev/vault-backend:latest  # <--- Build emas, tayyor image ishlatiladi
     container_name: vault-backend
     ports:
       - "8080:8080"

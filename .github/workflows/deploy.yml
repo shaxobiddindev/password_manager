@@ -36,6 +36,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd ~/pass_manager
-            docker-compose pull
-            docker-compose up -d
+            docker compose pull
+            docker compose up -d
             docker image prune -f
+        
